@@ -1,0 +1,90 @@
+!pip install git+https://github.com/afnan47/cuda.git
+%load_ext nvcc_plugin
+
+%%writefile vector_add.cu
+#include <iostream>
+using namespace std;
+
+__global__
+void add(int* A,int* B, int* C, int size){
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if(tid<size){
+        C[tid] = A[tid]+B[tid];
+    }
+}
+
+void initilize(int* vector, int size){
+    for(int i=0;i<size;i++){
+        vector[i] = rand()%10;
+    }
+}
+
+void print(int* vector, int size){
+    for(int i=0;i<size;i++){
+    cout<<vector[i]<<" ";
+    }
+    cout<<endl;
+}
+
+
+int main(){
+    int N = 4;
+    int* A = new int[N];
+    int* B = new int[N];
+    int* C = new int[N];
+
+    initilize(A,N);
+    initilize(B,N);
+    initilize(C,N);
+
+    cout<<"Vector A ";
+    print(A,N);
+    cout<<"Vector B ";
+    print(B,N);
+
+    int *d_A, *d_B, *d_C;
+    size_t bytes = N*sizeof(int);
+
+    cudaMalloc(&d_A,bytes);
+    cudaMalloc(&d_B,bytes);
+    cudaMalloc(&d_C,bytes);
+
+    cudaMemcpy(d_A,A,bytes,cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B,B,bytes,cudaMemcpyHostToDevice);
+
+    int threadPerBlock = 256;
+    int blockPerGrid = (N+threadPerBlock -1)/threadPerBlock;
+
+    add<<<blockPerGrid,threadPerBlock>>>(d_A,d_B,d_C,N);
+    cudaDeviceSynchronize();
+
+
+    cudaMemcpy(C,d_C,bytes,cudaMemcpyDeviceToHost);
+
+    cudaError_t err = cudaGetLastError();
+    if (err!=cudaSuccess){
+            cout<<"CUDA error: "<< cudaGetErrorString(err)<<endl;
+        return 1;
+
+    }
+
+    cout<<"Addition ";
+    print(C,N);
+
+
+    delete[] A;
+    delete[] B;
+    delete[] C;
+
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    return 0;
+    
+
+}
+
+
+!nvcc -arch=sm_75 vector_add.cu -o vector_add
+!./vector_add
