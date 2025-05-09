@@ -1,33 +1,44 @@
 !pip install git+https://github.com/afnan47/cuda.git
 %load_ext nvcc_plugin
-%%writefile vector_add.cu
 
+
+%%writefile matrix_multipy.cu
 #include <iostream>
+#include <cstdlib>
 using namespace std;
 
 __global__
-void add(int* A, int* B, int* C, int size){
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid<size){
-        C[tid] = A[tid]+B[tid];
+void multiply(int* A, int* B, int* C, int size){
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(row<size && col<size){
+        int sum = 0;
+        for(int i=0;i<size;i++){
+            sum += (A[row*size + i] * B[i*size + col]);
+        }
+        C[row*size + col] = sum;
     }
 }
 
 void initilize(int* vector, int size){
-    for(int i=0;i<size;i++){
+    for(int i=0;i<size*size;i++){
         vector[i] = rand()%10;
     }
 }
 
 void print(int* vector, int size){
-    for(int i=0;i<size;i++){
-        cout<< vector[i]<<" ";
+    for(int row=0;row<size;row++){
+        for(int col=0;col<size;col++){
+        cout<<vector[row*size + col]<< " ";
+        }
+        cout<<"\n";
     }
-    cout<<endl;
+cout<<"\n";
 }
 
 int main(){
-    int N = 4;
+    int N = 2;
     int* A = new int[N];
     int* B = new int[N];
     int* C = new int[N];
@@ -35,14 +46,13 @@ int main(){
     initilize(A,N);
     initilize(B,N);
 
-    cout<<"vector A ";
+    cout<<"Vector A \n";
     print(A,N);
-
-    cout<<"vector B ";
+    cout<<"Vector B \n";
     print(B,N);
 
     int *d_A, *d_B, *d_C;
-    size_t byte = N*sizeof(int);
+    size_t byte = N*N*sizeof(int);
 
     cudaMalloc(&d_A,byte);
     cudaMalloc(&d_B,byte);
@@ -51,14 +61,15 @@ int main(){
     cudaMemcpy(d_A,A,byte,cudaMemcpyHostToDevice);
     cudaMemcpy(d_B,B,byte,cudaMemcpyHostToDevice);
 
-    int threadPerBlock = 256;
-    int blockPerGrid = (N+threadPerBlock - 1)/threadPerBlock;
+    dim3 threads(2,2);
+    dim3 blocks((N+threads.x-1)/threads.x, (N+threads.y-1)/threads.y);
 
-    add<<<blockPerGrid,threadPerBlock>>>(d_A,d_B,d_C,N);
+    multiply<<<blocks,threads>>>(d_A,d_B,d_C,N);
     cudaDeviceSynchronize();
 
     cudaMemcpy(C,d_C,byte,cudaMemcpyDeviceToHost);
-    cout<<"addition ";
+
+    cout<<"multiplication \n";
     print(C,N);
 
     delete[] A;
@@ -68,9 +79,9 @@ int main(){
     cudaFree(d_A);
     cudaFree(d_B);
     cudaFree(d_C);
-
     return 0;
+
 }
 
-!nvcc -arch=sm_75 vector_add.cu -o vector_add
-!./vector_add
+!nvcc -arch=sm_75 matrix_multipy.cu -o matrix_multiply
+!./matrix_multiply
